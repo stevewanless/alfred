@@ -72,7 +72,7 @@ class Alfred_base {
 	// --------------------------------------------------------------------
 
 	/**
-	 * new
+	 * getNew
 	 *
 	 * The base new function
 	 * Returns an new object
@@ -144,8 +144,8 @@ class Alfred_base {
        * For example, if all of your tables have an active column, you could always force that to be set everytime get() is called
        * $model->where('active', '1');
        */
-        
-      $model->get();
+          
+      $model->get();      
       
     } else {
     
@@ -162,9 +162,9 @@ class Alfred_base {
 	// --------------------------------------------------------------------
 
 	/**
-	 * set
+	 * Save
 	 *
-	 * The base set function
+	 * The base save function
 	 * 
 	 * Note:
 	 * If it find $array['id'] it will update the existing record
@@ -173,7 +173,100 @@ class Alfred_base {
 	 * @param array of values to set for object
 	 */  		
 	 
-	public function set($var, $related = NULL) {
+	public function save($var, $related = NULL ) {
+
+    // create model
+    $model = new $this->name();	     
+
+    // if existing record, get record to update 
+    if ( isset($var['id']) ) {
+      $model->where('id', $var['id']);
+      $model->get();
+    }
+    
+    // set values
+    foreach ($var as $key => $value) {
+      $model->$key = $value;
+    }
+    
+    // save object
+    if ( is_object($related) ):
+      $model->save($related);
+    elseif( is_array($related) ):          
+      // takes an array where the key is the name of the object and the value is a comma separated list of ids
+      
+      // store current name to reset later
+      $old_name = $this->name;
+      
+      // loop through the related array so we can save lots of relationships at once
+      foreach($related as $key => $value):
+        
+        if ($value):
+        
+          // make an array out of the ids                
+          $ids = explode(',', $value);
+          
+          if ( count($ids) > 0 ):
+            // set current name
+            $this->name = $key;      
+            
+            // remove relationships no longer present in $ids      
+            foreach ( $model->$key->all as $obj ) {
+              if( in_array( $obj->id, $ids) ) {
+                // only save new ones, not existing ones. 
+                $ids = array_diff($ids, array($obj->id) );
+              } else {
+                // delete relationship
+                // get object by id
+                $obj = $this->get( trim($obj->id) );
+                
+                // save to main object
+                $model->delete($obj);                
+              }
+                    
+            }                        
+            
+            // save new relationships
+            foreach($ids as $id):
+              // get object by id
+              $obj = $this->get( trim($id) );
+              
+              // save to main object
+              $model->save($obj);
+              
+            endforeach;              
+            
+          endif;
+          
+        endif;
+
+      endforeach;
+      
+      // reset name in case it's still going to be used
+      $this->name = $old_name;
+
+    endif;
+    
+    // make sure everything is saved
+    $model->save();        
+    
+    // return object      
+    return $model;
+	 
+	}
+	
+	
+	// --------------------------------------------------------------------
+
+	/**
+	 * populate
+	 *
+	 * The base populate function. Sets array values to object
+	 *
+	 * @param array of values to set for object
+	 */  		
+	 
+	public function populate($var, $related = NULL) {
 	 
     // create model
     $model = new $this->name();	     
@@ -190,8 +283,37 @@ class Alfred_base {
     }
     
     // save object
-    if ($related):
-      $model->save($related);      
+    if ( is_object($related) ):
+      $model->save($related);
+    elseif( is_array($related) ):          
+      // takes an array where the key is the name of the object and the value is a comma separated list of ids
+      
+      // store current name to reset later
+      $old_name = $this->name;
+      
+      // loop through the related array so we can save lots of relationships at once
+      foreach($related as $key => $value):
+        
+        // make an array out of the ids                
+        $ids = explode(',', $value);
+        
+        // set current name
+        $this->name = $key;
+        
+        foreach($ids as $id):
+          // get object by id
+          $obj = $this->get( trim($id) );
+          
+          // save to main object
+          $model->save($obj);
+          
+        endforeach;              
+
+      endforeach;
+      
+      // reset name in case it's still going to be used
+      $this->name = $old_name;
+      
     else:    
       $model->save();    
     endif;
@@ -199,7 +321,7 @@ class Alfred_base {
     // return object      
     return $model;
 	 
-	}
+	}	
 	
 	
 	// --------------------------------------------------------------------
@@ -216,7 +338,7 @@ class Alfred_base {
 	 
     // check to see if $id is given
     if ( $id == NULL ) {      
-      show_error("ID not supplied to Alfred Delete function.");    
+      show_error("ID not supplied to Alfred Delete.");    
     }	   
 	 
     // create model
